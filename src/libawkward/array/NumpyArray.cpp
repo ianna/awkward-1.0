@@ -651,17 +651,36 @@ namespace awkward {
   }
 
   const std::shared_ptr<Content> NumpyArray::count(int64_t axis) const {
-    if (axis != 0) {
-      throw std::runtime_error("FIXME: NumpyArray::count(axis != 0)");
+    if (axis >= ndim() - 1) {
+      throw std::invalid_argument(std::string("NumpyArray cannot be counted in axis ") + std::to_string(axis) + (" because it has ") + std::to_string(ndim()) + std::string(" dimensions"));
     }
-    Index64 tocount = count64();
-    std::vector<ssize_t> shape({ (ssize_t)tocount.length() });
-    std::vector<ssize_t> strides({ (ssize_t)sizeof(int64_t) });
+
 #ifdef _MSC_VER
     std::string format = "q";
 #else
     std::string format = "l";
 #endif
+
+    if (axis > 0) {
+      // FIXME: start with shape_[0 + 1] and end with shape_[axis]?
+      std::vector<ssize_t> shape({ shape_[axis - 1], shape_[axis] });
+      std::vector<ssize_t> strides(shape.size(), (ssize_t)sizeof(int64_t));
+
+      // FIXME: accumulate length in all shape_[0 + 1] to shape_[axis]?
+      int64_t len = shape_[axis - 1] * shape_[axis];
+      Index64 tocount(len);
+      struct Error err = awkward_regulararray_count(
+        tocount.ptr().get(),
+        (int64_t)shape_[axis + 1],
+        len);
+      util::handle_error(err, classname(), identities_.get());
+
+      return std::make_shared<NumpyArray>(Identities::none(), util::Parameters(), tocount.ptr(), shape, strides, 0, sizeof(int64_t), format);
+    }
+    Index64 tocount = count64();
+    std::vector<ssize_t> shape({ (ssize_t)tocount.length() });
+    std::vector<ssize_t> strides({ (ssize_t)sizeof(int64_t) });
+
     return std::make_shared<NumpyArray>(Identities::none(), util::Parameters(), tocount.ptr(), shape, strides, 0, sizeof(int64_t), format);
   }
 
